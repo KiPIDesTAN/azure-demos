@@ -1,14 +1,40 @@
 ###################################
-# This file is a port of the V1-Create-azUpdatePatchDeploymentList-Sch-Ena-Dis.ps1 file
-# that was utilized for Azure Automation Update Management. This script is a port to work with
-# Azure Update Management Center, in preview at the time of this file's creation.
+# Author: Adam Newhard
+# URL: https://github.com/KiPIDesTAN/azure-demos
 #
-# While this file attempts to implement all that was available in the AAUM version, it cannot do 
-# everything due to differences in the script. Those differencesa are documented below as a working
-# record.
+# This file is an implementation of the Azure Update Management Center REST API and other 
+# functionality available via the Azure Portal. This code is based on the REST API available at
+# https://learn.microsoft.com/en-us/azure/update-center/manage-vms-programmatically
+#
+# Requirements:
+# 1. Azure PowerShell module. Install-Module Az
+# 2. Connect to Azure. Connect-AzAccount
 ###################################
 
 function Invoke-AUMCAssessment {
+    <#
+    .SYNOPSIS
+    Starts an update assessment.
+    .DESCRIPTION
+    Starts an update assessment for a single VM within Azure Update Management Center. The cmdlet will wait for the completion of the assessment by default
+    and return a list of all the packages or KBs that are available for the VM. If -NoWait is set, the cmdlet will not wait and nothing will be returned.
+    .PARAMETER SubscriptionId
+    Subscription Id of the VM to be assessed.
+    .PARAMETER ResourceGroup
+    Resource group name of the VM to be assessed.
+    .PARAMETER VMName
+    Name of the VM to be assessed.
+    .PARAMETER NoWait
+    When set, the cmdlet won't wait for the assessment to complete and will immediately return. Will wait for the assessment to complete when not set.
+    .EXAMPLE
+    Invoke-AUMCAssessment -SubscriptionId 11111-11111-11111-11111-111111 -ResourceGroup MyResourceGroup -VMName MyVM
+    .EXAMPLE
+    Invoke-AUMCAssessment -SubscriptionId 11111-11111-11111-11111-111111 -ResourceGroup MyResourceGroup -VMName MyVM -NoWait
+    .LINK
+    https://github.com/KiPIDesTAN/azure-demos
+    .LINK
+    https://learn.microsoft.com/en-us/azure/update-center/manage-vms-programmatically
+    #>
     [CmdletBinding(SupportsShouldProcess=$True)]
 	param(
 		[Parameter(Mandatory=$true)]
@@ -21,14 +47,14 @@ function Invoke-AUMCAssessment {
         [Switch]$NoWait
 	)
 
+
     # Execute a machine assessment
-    # az rest --method post --url https://management.azure.com/subscriptions/subscriptionId/resourceGroups/resourceGroupName/providers/Microsoft.Compute/virtualMachines/virtualMachineName/assessPatches?api-version=2020-12-01
     $restResult = Invoke-AzRestMethod -Path "/subscriptions/$SubscriptionId/resourcegroups/$ResourceGroup/providers/microsoft.compute/virtualmachines/$VMName/assessPatches?api-version=2020-12-01" -Method POST -Payload '{}'
 
     if ($restResult.StatusCode -ne 202) {
         $errorObj = ($restResult.Content | ConvertFrom-Json).error
         Write-Error -Message $errorObj.message -ErrorId $errorObj.code
-        return 1
+        return $restResult.Content
     }
 
     if (!$NoWait) {
