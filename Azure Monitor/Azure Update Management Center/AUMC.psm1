@@ -276,7 +276,7 @@ function Add-AUMCConfigurationAssignment {
     }
 }
 
-function Set-AUMCVMPatchMode {
+function Get-AUMCVMUpdateSettings {
     [CmdletBinding(SupportsShouldProcess=$True)]
 	param(
 		[Parameter(Mandatory=$true)]
@@ -284,22 +284,22 @@ function Set-AUMCVMPatchMode {
         [Parameter(Mandatory=$true)]
 		[string]$ResourceGroup,
         [Parameter(Mandatory=$true)]
-		[string]$VMName,
-        [Parameter(Mandatory=$true)]    # TODO: Set the patch mode to some appropriate values, like we did with Set-AUMCVMAssessmentMode
-        [string]$PatchModePayload
-	)
+		[string]$VMName
+    )
 
-    # NOTE: We use the direct REST API command instead of Set-AzVMOperatingSystem so we don't need to pull a PSCredential object.
-    $restResult = Invoke-AzRestMethod -Path "subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.Compute/virtualMachines/$($VMName)?api-version=2020-12-01" -Method PUT -Payload $PatchModePayload
+    $vmJson = Invoke-AzRestMethod -Path "subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.Compute/virtualMachines/$($VMName)?api-version=2022-11-01" -Method GET
+    $vm = $vmJson.Content | ConvertFrom-Json
 
-    if ($restResult.StatusCode -ne 202) {
-        $errorObj = ($restResult.Content | ConvertFrom-Json).error
-        Write-Error -Message $errorObj.message -ErrorId $errorObj.code
-        return 1
+    if ($vm.properties.storageProfile.osDisk.osType -eq 'Linux') {
+        return $vm.properties.osProfile.linuxConfiguration.patchSettings
     }
+    elseif ($vm.properties.storageProfile.osDisk.osType -eq 'Windows') {
+        return $vm.properties.osProfile.windowsConfiguration.patchSettings
+    }
+    return $null
 }
 
-function Set-AUMCVMAssessmentMode {
+function Set-AUMCVMUpdateSettings {
     [CmdletBinding(SupportsShouldProcess=$True)]
 	param(
 		[Parameter(Mandatory=$true)]
@@ -309,44 +309,90 @@ function Set-AUMCVMAssessmentMode {
         [Parameter(Mandatory=$true)]
 		[string]$VMName,
         [Parameter(Mandatory=$false)]
-        [ValidateSet('Enabled','Disabled')]
-        [string]$PeriodicAssessment
+        [ValidateSet('AutomaticByPlatform', 'ImageDefault')]
+        [string]$AssessmentMode,
+        [Parameter(Mandatory=$false)]
+        [ValidateSet('AutomaticByPlatform', 'AutomaticByOS','Manual','ImageDefault')]
+        [string]$PatchMode,
+        [Parameter(Mandatory=$false)]
+        [ValidateSet('Enabled', 'Disabled')]
+        [string]$HotPatching
 	)
 
-    # Get the VM profile so we can create the appropriate payload to set the assessment mode
+    if ([String]::IsNullOrWhiteSpace($AssessmentMode) -and [String]::IsNullOrWhiteSpace($PatchMode) -and [String]::IsNullOrWhiteSpace($HotPatching)) {
+        throw "At least one of AssessmentMode, PatchMode, or HotPatching must be set."
+    }
+    
+    # Get the VM profile so we can create the appropriate payload
     $vmJson = Invoke-AzRestMethod -Path "subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.Compute/virtualMachines/$($VMName)?api-version=2022-11-01" -Method GET
-
     $vm = $vmJson.Content | ConvertFrom-Json
 
+    # Go down each path for the osType
     if ($vm.properties.storageProfile.osDisk.osType -eq 'Linux') {
+        if ($PatchMode -in @('AutomaticByOS','Manual')) {
+            throw "$PatchMode patch orchestration is only available on Windows."
+        }
+
+        if ($null -ne $HotPatching) {
+            throw "Hot patching's value is set, but is only available on Windows."
+        }
+
+        # Create a genereic payload
         $payLoad = @{
             location = $vm.location
             properties = @{
                 osProfile = @{
                     linuxConfiguration = @{
-                        patchSettings = @{
-                            assessmentMode = if ($PeriodicAssessment -eq 'Enabled') { "AutomaticByPlatform" } else { "ImageDefault" }
-                            patchMode = $vm.properties.osProfile.linuxConfiguration.patchSettings.patchMode
-                        }
+                        patchSettings = @{}
                     }
                 }
             }
         }
+
+        if (![String]::IsNullOrWhiteSpace($AssessmentMode)) {
+            $payLoad.properties.osProfile.linuxConfiguration.patchSettings["assessmentMode"] = $AssessmentMode
+        }
+        if (![String]::IsNullOrWhiteSpace($PatchMode)) {
+            $payLoad.properties.osProfile.linuxConfiguration.patchSettings["patchMode"] = $PatchMode
+        }
     }
-    # TODO: Add Windows support
+    elseif ($vm.properties.storageProfile.osDisk.osType -eq 'Windows') {
+        # Create a genereic payload
+        $payLoad = @{
+            location = $vm.location
+            properties = @{
+                osProfile = @{
+                    windowsConfiguration = @{
+                        patchSettings = @{}
+                    }
+                }
+            }
+        }
+
+        if (![String]::IsNullOrWhiteSpace($AssessmentMode)) {
+            $payLoad.properties.osProfile.windowsConfiguration.patchSettings["assessmentMode"] = $AssessmentMode
+        }
+        if (![String]::IsNullOrWhiteSpace($PatchMode)) {
+            $payLoad.properties.osProfile.windowsConfiguration.patchSettings["patchMode"] = $PatchMode
+        }
+        if (![String]::IsNullOrWhiteSpace($HotPatching)) {
+            $payLoad.properties.osProfile.windowsConfiguration.patchSettings["enableHotpatching"] = if ($HotPatching -eq 'Enabled') { $true } else { $false }
+        }
+    }
 
     # NOTE: We use the direct REST API command instead of Set-AzVMOperatingSystem so we don't need to pull a PSCredential object.
-    $restResult = Invoke-AzRestMethod -Path "subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.Compute/virtualMachines/$($VMName)?api-version=2022-11-01" -Method PUT -Payload $($payLoad | ConvertTo-Json -Depth 5)
-
+    $restResult = Invoke-AzRestMethod -Path "subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.Compute/virtualMachines/$($VMName)?api-version=2022-11-01" -Method PUT -Payload ($payLoad | ConvertTo-Json -Depth 10)
+    
     if ($restResult.StatusCode -ne 200) {
         $errorObj = ($restResult.Content | ConvertFrom-Json).error
         Write-Error -Message $errorObj.message -ErrorId $errorObj.code
-        return 1
+        return $result.Content
     }
-    return ($restResult.Content | ConvertFrom-Json)
+
+    return $restResult.Content
 }
 
 Export-ModuleMember -Function Add-AUMCConfigurationAssignment
 Export-ModuleMember -Function Invoke-AUMCAssessment, Invoke-AUMCOneTimeDeployment
-Export-ModuleMember -Function Get-AUMCAssessmentPatches, Get-AUMCDeploymentActivities, Get-AUMCDeploymentHistory
-Export-ModuleMember -Function Set-AUMCVMPatchMode, Set-AUMCVMAssessmentMode
+Export-ModuleMember -Function Get-AUMCAssessmentPatches, Get-AUMCDeploymentActivities, Get-AUMCDeploymentHistory, Get-AUMCVMUpdateSettings
+Export-ModuleMember -Function Set-AUMCVMUpdateSettings
