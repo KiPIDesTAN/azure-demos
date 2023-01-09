@@ -80,6 +80,25 @@ function Invoke-AUMCAssessment {
 }
 
 function Get-AUMCAssessmentPatches {
+    <#
+    .SYNOPSIS
+    Gets the latest assessment
+    .DESCRIPTION
+    Gets the list of the patches discovered during the latest assessment. The id and the properties JSON is returned. This should probably be cleaned up to return discrete
+    information in the future.
+    .PARAMETER SubscriptionId
+    Subscription Id of the VM to be assessed.
+    .PARAMETER ResourceGroup
+    Resource group name of the VM to be assessed.
+    .PARAMETER VMName
+    Name of the VM to be assessed.
+    .EXAMPLE
+    Get-AUMCAssessmentPatches -SubscriptionId 11111-11111-11111-11111-111111 -ResourceGroup MyResourceGroup -VMName MyVM
+    .LINK
+    https://github.com/KiPIDesTAN/azure-demos
+    .LINK
+    https://learn.microsoft.com/en-us/azure/update-center/manage-vms-programmatically
+    #>
 	param(
 		[Parameter(Mandatory=$true)]
 		[string]$SubscriptionId,
@@ -97,10 +116,56 @@ function Get-AUMCAssessmentPatches {
     $queryResults = Search-AzGraph -Query $patchListQuery -Subscription $SubscriptionId
 
     # Show the list of patches available
-    $queryResults.properties
+    [PSObject[]]$queryResults.properties
 }
 
 function Invoke-AUMCOneTimeDeployment {
+    <#
+    .SYNOPSIS
+    Invokes a one time deployment based on the parameteres provided.
+    .DESCRIPTION
+    Deploys a series of patches to the target VM based on criteria passed as parameters
+    .PARAMETER Linux
+    Identifies the VM to be patched is Linux
+    .PARAMETER Windows
+    Identifies the VM to be patched is Windows
+    .PARAMETER SubscriptionId
+    Subscription Id of the VM to be assessed.
+    .PARAMETER ResourceGroup
+    Resource group name of the VM to be assessed.
+    .PARAMETER VMName
+    Name of the VM to be assessed.
+    .PARAMETER MaximumDuration
+    Maximum duration of the deployment. The value passed here is an ISO 8601-compliant duration. Defaults to PT120M, which is 120 minutes.
+    .PARAMETER RebootSettings
+    Reboot options post-deployment. Valid values are IfRequired, NeverReboot, or AlwaysReboot. IfRequired is the default.
+    .PARAMETER ClassificationsToInclude
+    Patch classificiations to deploy.
+    .PARAMETER PackageNameMasksToInclude
+    Array of package masks for inclusion during deployment. Applies when -Linux is passed on the command line.
+    .PARAMETER PackageNameMasksToExclude
+    Array of package masks for exclusion during deployment. Applies when -Linux is passed on the command line.
+    .PARAMETER KbNumbersToInclude
+    Array of KBs for inclusion during deployment. Applies when -Windows is passed on the command line.
+    .PARAMETER KbNumbersToExclude
+    Array of KBs for exclusion during deployment. Applies when -Windows is passed on the command line.
+    .PARAMETER NoWait
+    When set, the cmdlet won't wait for the assessment to complete and will immediately return. Will wait for the assessment to complete when not set.
+    .EXAMPLE
+    Invoke-AUMCOneTimeDeployment -SubscriptionId 11111-11111-11111-11111-111111 -ResourceGroup MyResourceGroup -VMName MyVM -Linux -Classifications "Other"
+    .EXAMPLE
+    Invoke-AUMCOneTimeDeployment -SubscriptionId 11111-11111-11111-11111-111111 -ResourceGroup MyResourceGroup -VMName MyVM -Linux -Classifications "Other" -PackageNameMasksToInclude "libcurl*", "python3*" -MaximumDuration PT60M
+    .EXAMPLE
+    Invoke-AUMCOneTimeDeployment -SubscriptionId 11111-11111-11111-11111-111111 -ResourceGroup MyResourceGroup -VMName MyVM -Windows -Classifications "Security", "Maintenance"
+    .EXAMPLE
+    Invoke-AUMCOneTimeDeployment -SubscriptionId 11111-11111-11111-11111-111111 -ResourceGroup MyResourceGroup -VMName MyVM -Windows -KbNumbersToInclude 2341243 -NoWait
+    .LINK
+    https://github.com/KiPIDesTAN/azure-demos
+    .LINK
+    https://learn.microsoft.com/en-us/azure/update-center/manage-vms-programmatically
+    .LINK
+    https://learn.microsoft.com/en-us/rest/api/compute/virtual-machines/install-patches
+    #>
     [CmdletBinding(SupportsShouldProcess=$True,DefaultParameterSetName='Linux')]
 	param(
         [Parameter(Mandatory=$false,ParameterSetName='Linux')]
@@ -155,7 +220,7 @@ function Invoke-AUMCOneTimeDeployment {
     Write-Verbose "Deployment Payload"
     Write-Verbose ($deploymentPayload | ConvertTo-Json -Depth 10)
 
-    $restResult = Invoke-AzRestMethod -Path "/subscriptions/$SubscriptionId/resourcegroups/$ResourceGroup/providers/microsoft.compute/virtualmachines/$VMName/installPatches?api-version=2020-12-01" -Method POST -Payload ($deploymentPayload | ConvertTo-Json -Depth 10)
+    $restResult = Invoke-AzRestMethod -Path "/subscriptions/$SubscriptionId/resourcegroups/$ResourceGroup/providers/microsoft.compute/virtualmachines/$VMName/installPatches?api-version=2022-08-01" -Method POST -Payload ($deploymentPayload | ConvertTo-Json -Depth 10)
  
     if ($restResult.StatusCode -ne 202) {
         $errorObj = ($restResult.Content | ConvertFrom-Json).error
@@ -209,6 +274,27 @@ function Invoke-AUMCOneTimeDeployment {
 }
 
 function Get-AUMCDeploymentActivities {
+    <#
+    .SYNOPSIS
+    Returns a list of all the deployment activites.
+    .DESCRIPTION
+    Returns a list of all the deployemnt activities that occurred during a given operationId. The list includes all the patches that were available as assessed packages during the deployment and identifies
+    which of those packages were installed.
+    .PARAMETER SubscriptionId
+    Subscription Id of the VM to be assessed.
+    .PARAMETER ResourceGroup
+    Resource group name of the VM to be assessed.
+    .PARAMETER VMName
+    Name of the VM to be assessed.
+    .PARAMETER OperationId
+    GUID uniquely representing the deployment
+    .EXAMPLE
+    Get-AUMCDeploymentActivities -SubscriptionId 11111-11111-11111-11111-111111 -ResourceGroup MyResourceGroup -VMName MyVM -OperationId 22222-22222-22222-22222-22222
+    .LINK
+    https://github.com/KiPIDesTAN/azure-demos
+    .LINK
+    https://learn.microsoft.com/en-us/azure/update-center/manage-vms-programmatically
+    #>
 	param(
 		[Parameter(Mandatory=$true)]
 		[string]$SubscriptionId,
@@ -228,7 +314,7 @@ function Get-AUMCDeploymentActivities {
     $queryResults = Search-AzGraph -Query $deploymentOperationsQuery -Subscription $SubscriptionId
 
     # Output the list of patches that were "available" during the deployment, including if they were installed, classification, patchName, and version of the patch
-    $queryResults.properties
+    [PSObject[]]$queryResults.properties
 }
 
 function Get-AUMCDeploymentHistory {
@@ -257,6 +343,28 @@ function Get-AUMCDeploymentHistory {
 }
 
 function New-AUMCMaintenanceConfiguration {
+    <#
+    .SYNOPSIS
+    Creates a new mainteinance configuration
+    .DESCRIPTION
+    Returns a list of all the deployemnt activities that occurred during a given operationId. The list includes all the patches that were available as assessed packages during the deployment and identifies
+    which of those packages were installed.
+    .PARAMETER SubscriptionId
+    Subscription Id where the maintenance configuration will be created.
+    .PARAMETER ResourceGroup
+    Resource group name where the maintenance configuration will be created.
+    .PARAMETER MaintenanceConfigurationName
+    Name of the maintenance configuration
+    .PARAMETER MaintenancePayload
+    Payload of the mainteinance configuration to be created.
+    TODO: This should be converted to take the actual input parameters and use the latest API
+    .EXAMPLE
+    TODO: Add an example once the MaintenancePayload is broken out into its individual parts.
+    .LINK
+    https://github.com/KiPIDesTAN/azure-demos
+    .LINK
+    https://learn.microsoft.com/en-us/azure/update-center/manage-vms-programmatically
+    #>
     [CmdletBinding(SupportsShouldProcess=$True)]
 	param(
 		[Parameter(Mandatory=$true)]
@@ -274,11 +382,36 @@ function New-AUMCMaintenanceConfiguration {
     if ($restResult.StatusCode -ne 202) {
         $errorObj = ($restResult.Content | ConvertFrom-Json).error
         Write-Error -Message $errorObj.message -ErrorId $errorObj.code
-        return 1
+        return $restResult.Content
     }
+
+    return $restResult.Content
 }
 
 function Add-AUMCConfigurationAssignment {
+     <#
+    .SYNOPSIS
+    Assigns a VM to a maintenance configuration
+    .DESCRIPTION
+    Assigns a VM to a maintenance configuration
+    .PARAMETER SubscriptionId
+    Subscription Id of the target VM.
+    .PARAMETER ResourceGroup
+    Resource group name of the target VM.
+    .PARAMETER VMName
+    Name of the target VM.
+    .PARAMETER ConfigurationAssignmentName
+    Name of the configuration assignment
+    .PARAMETER ConfigurationAssignmentPayload
+    Configuration assignment JSON payload.
+    TODO: Update the ConfigurationAssignmentPayload to break it into the discrete values.
+    .EXAMPLE
+    TODO: Add an example once the ConfigurationAssignmentPayload is broken down into its discrete parts
+    .LINK
+    https://github.com/KiPIDesTAN/azure-demos
+    .LINK
+    https://learn.microsoft.com/en-us/azure/update-center/manage-vms-programmatically
+    #>
     [CmdletBinding(SupportsShouldProcess=$True)]
 	param(
 		[Parameter(Mandatory=$true)]
@@ -293,16 +426,36 @@ function Add-AUMCConfigurationAssignment {
         [string]$ConfigurationAssignmentPayload
 	)
 
+    # TODO: Validate we are using the latest API version
     $restResult = Invoke-AzRestMethod -Path "/subscriptions/$SubscriptionId/resourcegroups/$ResourceGroup/providers/microsoft.compute/virtualmachines/$VMName/providers/Microsoft.Maintenance/configurationAssignments/$($ConfigurationAssignmentName)?api-version=2021-09-01-preview" -Method PUT -Payload $ConfigurationAssignmentPayload
 
     if ($restResult.StatusCode -ne 202) {
         $errorObj = ($restResult.Content | ConvertFrom-Json).error
         Write-Error -Message $errorObj.message -ErrorId $errorObj.code
-        return 1
+        return $restResult.Content
     }
+    return $restResult.Content
 }
 
 function Get-AUMCVMUpdateSettings {
+    <#
+    .SYNOPSIS
+    Gets the current update settings for a VM.
+    .DESCRIPTION
+    Gets the current update settings for a VM. Null is returned if no settings are found.
+    .PARAMETER SubscriptionId
+    Subscription Id of the target VM.
+    .PARAMETER ResourceGroup
+    Resource group name of the target VM.
+    .PARAMETER VMName
+    Name of the target VM.
+    .EXAMPLE
+    Get-AUMCVMUpdateSettings -SubscriptionId 11111-11111-11111-11111-11111 -ResourceGroup MyResourceGroup -VMName MyVM
+    .LINK
+    https://github.com/KiPIDesTAN/azure-demos
+    .LINK
+    https://learn.microsoft.com/en-us/azure/update-center/manage-vms-programmatically
+    #>
     [CmdletBinding(SupportsShouldProcess=$True)]
 	param(
 		[Parameter(Mandatory=$true)]
@@ -326,6 +479,36 @@ function Get-AUMCVMUpdateSettings {
 }
 
 function Set-AUMCVMUpdateSettings {
+    <#
+    .SYNOPSIS
+    Set the update settings for a VM.
+    .DESCRIPTION
+    Set the assessment mode, patch mode, and hotpatching functionality for a VM.
+    .PARAMETER SubscriptionId
+    Subscription Id of the target VM.
+    .PARAMETER ResourceGroup
+    Resource group name of the target VM.
+    .PARAMETER VMName
+    Name of the target VM.
+    .PARAMETER AssessmentMode
+    Method of assessment for updates. Valid valuse are AutomaticByPlatform or ImageDefault.
+    .PARAMETER PatchMode
+    Method of patching. Valid valuse are AutomaticByPlatform, AutomaticByOS, Manual, ImageDefault.
+    .PARAMETER Hotpatching
+    Enables or disables the ability to hotpatch a system. Valued values are Enabled or Disabled.
+    .EXAMPLE
+    Get-AUMCVMUpdateSettings -SubscriptionId 11111-11111-11111-11111-11111 -ResourceGroup MyResourceGroup -VMName MyVM
+    .LINK
+    https://github.com/KiPIDesTAN/azure-demos
+    .LINK
+    https://learn.microsoft.com/en-us/azure/update-center/manage-vms-programmatically
+    .LINK
+    https://learn.microsoft.com/en-us/dotnet/api/microsoft.azure.management.compute.models.patchsettings.assessmentmode?view=azure-dotnet
+    .LINK
+    https://learn.microsoft.com/en-us/azure/virtual-machines/automatic-vm-guest-patching#patch-orchestration-modes
+    .LINK
+    https://learn.microsoft.com/en-us/azure/automanage/automanage-hotpatch
+    #>
     [CmdletBinding(SupportsShouldProcess=$True)]
 	param(
 		[Parameter(Mandatory=$true)]
@@ -342,11 +525,11 @@ function Set-AUMCVMUpdateSettings {
         [string]$PatchMode,
         [Parameter(Mandatory=$false)]
         [ValidateSet('Enabled', 'Disabled')]
-        [string]$HotPatching
+        [string]$Hotpatching
 	)
 
-    if ([String]::IsNullOrWhiteSpace($AssessmentMode) -and [String]::IsNullOrWhiteSpace($PatchMode) -and [String]::IsNullOrWhiteSpace($HotPatching)) {
-        throw "At least one of AssessmentMode, PatchMode, or HotPatching must be set."
+    if ([String]::IsNullOrWhiteSpace($AssessmentMode) -and [String]::IsNullOrWhiteSpace($PatchMode) -and [String]::IsNullOrWhiteSpace($Hotpatching)) {
+        throw "At least one of AssessmentMode, PatchMode, or Hotpatching must be set."
     }
     
     # Get the VM profile so we can create the appropriate payload
@@ -359,7 +542,7 @@ function Set-AUMCVMUpdateSettings {
             throw "$PatchMode patch orchestration is only available on Windows."
         }
 
-        if ($null -ne $HotPatching) {
+        if ($null -ne $Hotpatching) {
             throw "Hot patching's value is set, but is only available on Windows."
         }
 
@@ -402,7 +585,7 @@ function Set-AUMCVMUpdateSettings {
             $payLoad.properties.osProfile.windowsConfiguration.patchSettings["patchMode"] = $PatchMode
         }
         if (![String]::IsNullOrWhiteSpace($HotPatching)) {
-            $payLoad.properties.osProfile.windowsConfiguration.patchSettings["enableHotpatching"] = if ($HotPatching -eq 'Enabled') { $true } else { $false }
+            $payLoad.properties.osProfile.windowsConfiguration.patchSettings["enableHotpatching"] = if ($Hotpatching -eq 'Enabled') { $true } else { $false }
         }
     }
 
@@ -412,7 +595,7 @@ function Set-AUMCVMUpdateSettings {
     if ($restResult.StatusCode -ne 200) {
         $errorObj = ($restResult.Content | ConvertFrom-Json).error
         Write-Error -Message $errorObj.message -ErrorId $errorObj.code
-        return $result.Content
+        return $restResult.Content
     }
 
     return $restResult.Content
