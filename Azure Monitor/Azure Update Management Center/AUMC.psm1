@@ -66,14 +66,21 @@ function Invoke-AUMCAssessment {
         | extend endTime = iff(properties.status =~ `"InProgress`" or properties.status =~ `"NotStarted`", datetime(null), todatetime(properties.lastModifiedDateTime))
         | project id, operationId = properties.assessmentActivityId, assessmentStatus = properties.status, updateOperation = `"Assessment`", operationType, startTime = properties.startDateTime, endTime, properties"
 
+        $assessmentStartTime = Get-Date -AsUTC
+        $assessmentStarted = $false
         # We want to execute this loop until $queryResults.assessmentStatus -ne "InProgress". If the assessmentStatus eq "Succeeded", we can move on.
         do
         {
             Write-Verbose "Polling for assessment completion."
-            Start-Sleep -Seconds 30 # During the first iteration, it may take up to 30 seconds for the assessment to start and update in the Resource Graph
+            Start-Sleep -Seconds 30 # During the first iteration, it may take up to 30 seconds for the assessment to start and update in the Resource Graph.
             $queryResults = Search-AzGraph -Query $assessmentQuery -Subscription $SubscriptionId
+            # Sometimes an assessment will not start within the first 30 seconds. We use the start time returned by the graph API to make sure that the startTime is greater than the time we initially started our assessment execution request to know that the assessment really started.
+            if ($assessmentStartTime -lt $queryResults.startTime -and !$assessmentStarted) {
+                Write-Verbose "Legitimate assessment found."
+                $assessmentStarted = $true
+            }
             Write-Verbose "Operation Id: $($queryResults.operationId) Status: $($queryResults.assessmentStatus)"
-        } while ($queryResults.assessmentStatus -eq "InProgress")
+        } while ($queryResults.assessmentStatus -eq "InProgress" -or !$assessmentStarted)
 
         return $queryResults
     }
@@ -259,6 +266,8 @@ function Invoke-AUMCOneTimeDeployment {
         | top 1 by startTime desc"
 
         # We want to execute this loop until $queryResults.updateDeploymentStatus -ne "InProgress". If the updateDeploymentStatus eq "Succeeded", we can move on.
+        $deploymentStartTime = Get-Date -AsUTC
+        $deploymentStarted = $false
         do
         {
             Write-Verbose "Polling for deployment completion."
@@ -266,8 +275,13 @@ function Invoke-AUMCOneTimeDeployment {
 
             # Get the status of the deployment. We want to find the most recent deployment for the resource. This is the first record returned, which is part of the filter in the query itself.
             $queryResults = Search-AzGraph -Query $deploymentStatusQuery -Subscription $SubscriptionId
+             # Sometimes an deployment will not start within the first 30 seconds. We use the start time returned by the graph API to make sure that the startTime is greater than the time we initially started our assessment execution request to know that the assessment really started.
+             if ($deploymentStartTime -lt $queryResults.startTime -and !$deploymentStarted) {
+                Write-Verbose "Legitimate assessment found."
+                $deploymentStartTime = $true
+            }
             Write-Verbose "Operation Id: $($queryResults.operationId) Status: $($queryResults.updateDeploymentStatus)"
-        } while ($queryResults.updateDeploymentStatus -eq "InProgress")
+        } while ($queryResults.updateDeploymentStatus -eq "InProgress" -or !$deploymentStarted)
         
         return $queryResults
     }
@@ -601,6 +615,82 @@ function Set-AUMCVMUpdateSettings {
     return $restResult.Content
 }
 
+function New-AUMCMaintenanceConfiguration {
+    [CmdletBinding(SupportsShouldProcess=$True)]
+	param(
+        [Parameter(Mandatory=$false,ParameterSetName='Linux')]
+        [Switch]$Linux,
+        [Parameter(Mandatory=$false,ParameterSetName='Windows')]
+        [Switch]$Windows,
+        [Parameter(Mandatory=$true)]
+		[string]$SubscriptionId,
+        [Parameter(Mandatory=$true)]
+		[string]$ResourceGroup,
+        [Parameter(Mandatory=$true)]
+		[string]$MaintenanceConfigurationName,
+		[string]$Location,
+        $ExtensionProperties,
+        [string]$MaintenanceScope,
+        $MaintenanceWindow,
+        [Parameter(Mandatory=$false)]
+        [ValidateSet('IfRequired','NeverReboot', 'AlwaysReboot')]
+        [string]$RebootSetting = 'IfRequired',
+        [Parameter(Mandatory=$false)]
+		[string[]]$ClassificationsToInclude = @(),
+        [Parameter(Mandatory=$false,ParameterSetName='Linux')]
+		[string[]]$PackageNameMasksToInclude = @(),
+        [Parameter(Mandatory=$false,ParameterSetName='Linux')]
+		[string[]]$PackageNameMasksToExclude = @(),
+        [Parameter(Mandatory=$false,ParameterSetName='Windows')]
+		[string[]]$KbNumbersToInclude = @(),
+        [Parameter(Mandatory=$false,ParameterSetName='Windows')]
+		[string[]]$KbNumbersToExclude = @()
+	)
+
+    $payload = @{
+        location = $Location
+        properties = @{
+            extensionProperties = $ExtensionProperties
+            maintenanceScope = $MaintenanceScope
+            maintenanceWindow = $MaintenanceWindow
+            installPatches = @{
+                rebootSetting = $RebootSetting
+            }
+        }
+    }   
+
+    if ($Linux) {
+        $payload.properties.installPatches["linuxParameters"] = @{
+                classificationsToInclude = $ClassificationsToInclude
+                packageNameMasksToInclude = $PackageNameMasksToInclude
+                packageNameMasksToExclude = $PackageNameMasksToExclude
+            }
+    }
+    if ($Windows) {
+        $payload.properties.installPatches["windowsParameters"] = @{
+                classificationsToInclude = $ClassificationsToInclude
+                kbNumbersToInclude = $KbNumbersToInclude
+                kbNumbersToExclude = $KbNumbersToExclude
+            }
+    }
+
+    Write-Verbose "Payload"
+    Write-Verbose  ($payload | ConvertTo-Json -Depth 10)
+
+    # https://learn.microsoft.com/en-us/azure/update-center/manage-vms-programmatically?tabs=cli%2Crest#create-a-maintenance-configuration-schedule
+    # PUT on `/subscriptions/<subscriptionId>/resourceGroups/<resourceGroup>/providers/Microsoft.Maintenance/maintenanceConfigurations/<maintenanceConfigurationsName>?api-version=2021-09-01-preview`
+    $restResult = Invoke-AzRestMethod -Path "subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.Maintenance/maintenanceConfigurations/$($MaintenanceConfigurationName)?api-version=2021-09-01-preview" -Method PUT -Payload ($payLoad | ConvertTo-Json -Depth 10)
+
+    if ($restResult.StatusCode -ne 200) {
+        $errorObj = ($restResult.Content | ConvertFrom-Json).error
+        Write-Error -Message $errorObj.message -ErrorId $errorObj.code
+        return $restResult.Content
+    }
+
+    return $restResult.Content
+}
+
+Export-ModuleMember -Function New-AUMCMaintenanceConfiguration
 Export-ModuleMember -Function Add-AUMCConfigurationAssignment
 Export-ModuleMember -Function Invoke-AUMCAssessment, Invoke-AUMCOneTimeDeployment
 Export-ModuleMember -Function Get-AUMCAssessmentPatches, Get-AUMCDeploymentActivities, Get-AUMCDeploymentHistory, Get-AUMCVMUpdateSettings
