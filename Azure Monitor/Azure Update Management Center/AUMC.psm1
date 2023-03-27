@@ -525,6 +525,10 @@ function Set-AUMCVMUpdateSettings {
     #>
     [CmdletBinding(SupportsShouldProcess=$True)]
 	param(
+        [Parameter(Mandatory=$false,ParameterSetName='Linux')]
+        [Switch]$Linux,
+        [Parameter(Mandatory=$false,ParameterSetName='Windows')]
+        [Switch]$Windows,
 		[Parameter(Mandatory=$true)]
 		[string]$SubscriptionId,
         [Parameter(Mandatory=$true)]
@@ -537,7 +541,7 @@ function Set-AUMCVMUpdateSettings {
         [Parameter(Mandatory=$false)]
         [ValidateSet('AutomaticByPlatform', 'AutomaticByOS','Manual','ImageDefault')]
         [string]$PatchMode,
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$false,ParameterSetName='Windows')]
         [ValidateSet('Enabled', 'Disabled')]
         [string]$Hotpatching
 	)
@@ -554,10 +558,6 @@ function Set-AUMCVMUpdateSettings {
     if ($vm.properties.storageProfile.osDisk.osType -eq 'Linux') {
         if ($PatchMode -in @('AutomaticByOS','Manual')) {
             throw "$PatchMode patch orchestration is only available on Windows."
-        }
-
-        if ($null -ne $Hotpatching) {
-            throw "Hot patching's value is set, but is only available on Windows."
         }
 
         # Create a genereic payload
@@ -615,7 +615,47 @@ function Set-AUMCVMUpdateSettings {
     return $restResult.Content
 }
 
-function New-AUMCMaintenanceConfiguration {
+function New-AUMCMaintenanceConfigurationSchedule {
+    <#
+    .SYNOPSIS
+    Creates a new maintenance configuration schedule in Azure Update Management Center.
+    .DESCRIPTION
+    Creates a new maintenance configuration schedule in Azure Update Management Center.
+    .PARAMETER Linux
+    When set, the cmdlet will create a maintenance configuration schedule for Linux VMs.
+    .PARAMETER Windows
+    When set, the cmdlet will create a maintenance configuration schedule for Windows VMs.
+    .PARAMETER SubscriptionId
+    Subscription Id of the VM to be assessed.
+    .PARAMETER ResourceGroup
+    Resource group name of the VM to be assessed.
+    .PARAMETER MaintenanceConfigurationName
+    Name of the maintenance configuration to be created.
+    .PARAMETER Location
+    Location where the maintenance configuration will be created.
+    .PARAMETER ExtensionProperties
+    A hashtable of extension properties to be passed to the maintenance configuration.
+    .PARAMETER MaintenanceScope
+    The maintenance scope.
+    .PARAMETER MaintenanceWindow
+    The maintenance window for the schedule. This is a hash table of startDateTime, expirationDateTime, duration, timeZone, and recurEvery.
+    .PARAMETER RebootSetting
+    The reboot setting for the schedule. Valid values are IfRequired, Never, and Always. Defaults to IfRequired.
+    .PARAMETER ClassificationsToInclude
+    Patch classificiations to deploy.
+    .PARAMETER PackageNameMasksToInclude
+    Array of package masks for inclusion during deployment. Applies when -Linux is passed on the command line.
+    .PARAMETER PackageNameMasksToExclude
+    Array of package masks for exclusion during deployment. Applies when -Linux is passed on the command line.
+    .PARAMETER KbNumbersToInclude
+    Array of KBs for inclusion during deployment. Applies when -Windows is passed on the command line.
+    .PARAMETER KbNumbersToExclude
+    # TODO: Add example invocations.
+    .LINK
+    https://github.com/KiPIDesTAN/azure-demos
+    .LINK
+    https://learn.microsoft.com/en-us/azure/update-center/manage-vms-programmatically?tabs=cli%2Crest#create-a-maintenance-configuration-schedule
+    #>
     [CmdletBinding(SupportsShouldProcess=$True)]
 	param(
         [Parameter(Mandatory=$false,ParameterSetName='Linux')]
@@ -628,10 +668,12 @@ function New-AUMCMaintenanceConfiguration {
 		[string]$ResourceGroup,
         [Parameter(Mandatory=$true)]
 		[string]$MaintenanceConfigurationName,
+        [Parameter(Mandatory=$true)]
 		[string]$Location,
-        $ExtensionProperties,
-        [string]$MaintenanceScope,
-        $MaintenanceWindow,
+        $ExtensionProperties,           # TODO: Add more information about this parameter
+        [string]$MaintenanceScope,      # TODO: Add the valid set.
+        [Parameter(Mandatory=$true)]
+        $MaintenanceWindow,             # TODO: This is presently a hash table and should be expanded to individual fields.
         [Parameter(Mandatory=$false)]
         [ValidateSet('IfRequired','NeverReboot', 'AlwaysReboot')]
         [string]$RebootSetting = 'IfRequired',
@@ -690,8 +732,65 @@ function New-AUMCMaintenanceConfiguration {
     return $restResult.Content
 }
 
+function Set-AUMCVMMaintenanceScheduleAssociation {
+    <#
+    .SYNOPSIS
+    Associate a VM with a maintenance configuration schedule.
+    .DESCRIPTION
+    Associates a VM with a maintenance configuration schedule.
+    .PARAMETER SubscriptionId
+    Subscription Id of the VM to be associated with the schedule.
+    .PARAMETER ResourceGroup
+    Resource group name of the VM to be associated with the schedule.
+    .PARAMETER VMName
+    Name of the VM to be associated with the schedule.
+    .PARAMETER MaintenanceConfigurationName
+    Name of the maintenance configuration to be associated with the VM.
+    .PARAMETER Location
+    Location where the VM to maintenance configuration association will be created.
+    # TODO: Add example invocations.
+    .LINK
+    https://github.com/KiPIDesTAN/azure-demos
+    .LINK
+    https://learn.microsoft.com/en-us/azure/update-center/manage-vms-programmatically?tabs=cli%2Crest#associate-a-vm-with-a-schedule
+    #>
+	param(
+        [Parameter(Mandatory=$true)]
+		[string]$SubscriptionId,
+        [Parameter(Mandatory=$true)]
+		[string]$ResourceGroup,
+        [Parameter(Mandatory=$true)]
+		[string]$VMName,
+        [Parameter(Mandatory=$true)]
+		[string]$MaintenanceConfigurationName,
+        [Parameter(Mandatory=$true)]
+		[string]$Location
+	)
+
+    $payload = @{
+        location = $Location
+        properties = @{
+            maintenanceConfigurationId = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.Maintenance/maintenanceConfigurations/$($MaintenanceConfigurationName)"
+        }
+    }
+
+    # https://learn.microsoft.com/en-us/azure/update-center/manage-vms-programmatically?tabs=cli%2Crest#associate-a-vm-with-a-schedule
+    # PUT on `<ARC or Azure VM resourceId>/providers/Microsoft.Maintenance/configurationAssignments/<configurationAssignment name>?api-version=2021-09-01-preview`
+    $restResult = Invoke-AzRestMethod -Path "subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.Compute/virtualMachines/$($VMName)/providers/Microsoft.Maintenance/configurationAssignments/$($MaintenanceConfigurationName)?api-version=2021-09-01-preview" -Method PUT -Payload ($payLoad | ConvertTo-Json -Depth 10)
+
+    if ($restResult.StatusCode -ne 200) {
+        $errorObj = ($restResult.Content | ConvertFrom-Json).error
+        Write-Error -Message $errorObj.message -ErrorId $errorObj.code
+        return $restResult.Content
+    }
+
+    return $restResult.Content
+}
+
+# TODO: Remove machine from a schedule https://learn.microsoft.com/en-us/azure/update-center/manage-vms-programmatically?tabs=cli%2Crest#remove-machine-from-the-schedule
+
 Export-ModuleMember -Function New-AUMCMaintenanceConfiguration
 Export-ModuleMember -Function Add-AUMCConfigurationAssignment
 Export-ModuleMember -Function Invoke-AUMCAssessment, Invoke-AUMCOneTimeDeployment
 Export-ModuleMember -Function Get-AUMCAssessmentPatches, Get-AUMCDeploymentActivities, Get-AUMCDeploymentHistory, Get-AUMCVMUpdateSettings
-Export-ModuleMember -Function Set-AUMCVMUpdateSettings
+Export-ModuleMember -Function Set-AUMCVMUpdateSettings, Set-AUMCVMMaintenanceScheduleAssociation
