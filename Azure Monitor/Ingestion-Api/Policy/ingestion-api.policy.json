@@ -1,0 +1,25 @@
+{
+    "if": {
+        "allOf": [
+            {
+                "field": "type",
+                "equals": "Microsoft.Authorization/roleAssignments"
+            },
+            {
+                "field": "Microsoft.Authorization/roleAssignments/principalType",
+                "equals": "ServicePrincipal"
+            },
+            {
+                "field": "Microsoft.Authorization/roleAssignments/scope",
+                "contains": "Microsoft.Insights/dataCollectionRules"
+            },
+            {
+                "field": "Microsoft.Authorization/roleAssignments/roleDefinitionId",
+                "contains": "3913510d-42f4-4e42-8a64-420c390055eb"
+            },
+        ]
+    },
+    "then": {
+        "effect": "[parameters('effect')]"
+    }
+}

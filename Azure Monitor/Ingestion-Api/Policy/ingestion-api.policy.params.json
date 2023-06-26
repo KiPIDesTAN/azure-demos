@@ -1,0 +1,14 @@
+{
+    "effect": {
+        "type": "String",
+        "metadata": {
+          "displayName": "Effect",
+          "description": "Deny or Audit the ability to assign the Monitoring Metrics Publisher role to a DCR."
+        },
+        "allowedValues": [
+          "Deny",
+          "Audit"
+        ],
+        "defaultValue": "Audit"
+      }
+}
