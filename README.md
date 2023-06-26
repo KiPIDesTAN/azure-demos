@@ -6,6 +6,8 @@ This repo contains a series of Azure demos. Please, visit each folder for an ind
 
 ### Azure Monitor
 
-[Azure Update Management Center](./Azure%20Monitor/Azure%20Update%20Management%20Center) - A collection of Azure Update Management Center demos and PowerShell modules
+[Azure Update Management Center](./Azure_Monitor/Azure_Update_Management_Center/) - A collection of Azure Update Management Center demos and PowerShell modules.
 
-[ServiceNow - Secure Webhook](./Azure%20Monitor/ServiceNow%20-%20Secure%20Webhook) Demonstrates creating an Azure Monitor Action Group to trigger events in ServiceNow using the ServiceNow ITOM connector and ServiceNow Event Management. Using a Secure Webhook is integrates Azure Active Directory based authentication and authorization.
+[Log Ingestion API](./Azure_Monitor/Log_Ingestion_Api/) - A collection of demos around the Log Ingestion API.
+
+[ServiceNow - Secure Webhook](./Azure_Monitor/ServiceNow_Secure_Webhook/) Demonstrates creating an Azure Monitor Action Group to trigger events in ServiceNow using the ServiceNow ITOM connector and ServiceNow Event Management. Using a Secure Webhook is integrates Azure Active Directory based authentication and authorization.
