@@ -1,0 +1,54 @@
+#cloud-config 
+package_upgrade: true
+packages:
+- moreutils
+write_files:
+  - path: /etc/cron.d/process_monitor
+    owner: root:root
+    permissions: '0644'
+    content: |
+      * * * * * root sh /usr/local/sbin/cron/process_monitor.sh
+      5 0 1 * * root sh /usr/local/sbin/cron/process_log_manager.sh
+  - path: /usr/local/sbin/cron/process_monitor.sh
+    owner: root:root
+    permissions: '0644'
+    content: |
+      #!/bin/sh
+
+      # NOTE: This script relies on the ts command found in moreutils
+      # apt install moretutils or yum install moreutils
+
+      FILENAME="process_monitor_$(date +"%Y%m%d").log"
+      LOG_DIRECTORY=/var/log/process_monitor
+
+      LOG_PATH="${LOG_DIRECTORY}/${FILENAME}"
+
+      # make the directory if it doesn't exist
+      mkdir -p $LOG_DIRECTORY
+
+      ps h -eo pid,uid,ppid,c,stime,tty,time,cmd | mawk NF=NF OFS=',' | ts "%Y-%m-%dT%H:%M:%.SZ," >> $LOG_PATH
+  - path: /usr/local/sbin/cron/process_log_manager.sh
+    owner: root:root
+    permissions: '0644'
+    content: |
+      #!/bin/sh
+
+      LOG_DIR=/var/log/process_monitor        # Directory where the log files can be found
+      FILE_PREFIX="process_monitor_"          # Prefix on all the log files
+      FILE_PATTERN="${FILE_PREFIX}*.log"              # Wildcard match for the log files
+      ARCHIVE_PATTERN="${FILE_PREFIX}*.tar.gz"        # Wildcard match for the archived log files
+      DAYS_OLD="+10"                                  # Number of days to look back for old log files
+      DAYS_OLD_ARCHIVE="+20"                          # Number of days to look back for old archives
+
+      ARCHIVE_NAME="process_monitor_$(date +"%Y%m%d").tar.gz"
+
+      # Find all the log files that are older than 10 days and tar.gz them
+      LOGS=$(find ${LOG_DIR} -name "${FILE_PATTERN}" -mtime $DAYS_OLD -print)
+
+      if ! [ -z "$LOGS" ]; then
+              tar cvfz ${ARCHIVE_NAME}.tar.gz $LOGS
+      fi
+
+      # Find all the tar.gz archives that are older than 20 days and delete them
+      # Max age of the log file that will be deleted is DAYS_OLD + DAYS_OLD_ARCHIVE
+      find ${LOG_DIR} -name "${ARCHIVE_PATTERN}" -mtime $DAYS_OLD_ARCHIVE -delete
