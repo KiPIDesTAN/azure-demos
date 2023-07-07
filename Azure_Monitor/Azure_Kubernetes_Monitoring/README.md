@@ -28,6 +28,12 @@ Create the resource group
 az group create --location <location> --name <resource_group_name>
 ```
 
+Deploy the baseline resources
 ```pwsh
 az deployment group create --name AKSMonitoring --resource-group <resource_group_name> --template-file aks_monitoring.bicep --parameters aks_monitoring.bicepparam
+```
+
+Set the Prometheus DCE network isolation via a separate deployment
+```pwsh
+az deployment group create --name AKSPrometheusMonitoring --resource-group 'MA_<resource_group_name>_<location>_managed' --template-file aks_monitoring_amw.bicep --parameters aks_monitoring_amw.bicepparam
 ```
