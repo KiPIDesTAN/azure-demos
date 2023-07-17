@@ -1,4 +1,4 @@
-# AKS AMPLS
+# Azure Kubernetes Service with Network Isolation via Azure Monitor Private Link Scope
 
 This demo deploys an AKS service using AMPLS to maintain private link communication between AKS and the Log Analytics Workspace and Azure Monitor Workspace it sends data to.
 
@@ -7,6 +7,10 @@ The deployment creates the following high-level flow. Container Insights data wi
 ![High-Level Diagram](./images/aks_ampls_diagram.png)
 
 The most important pieces of this diagram are outlined below.
+
+### General
+
+Managed Prometheus offers [recording rules](https://prometheus.io/docs/prometheus/latest/configuration/recording_rules/) as part of a deployment via the Azure Portal. Those are not included as part of this IaC deployment. However, they may be added in the future.
 
 ### RG-AKS Resource Group
 
@@ -42,25 +46,25 @@ The commands below will execute the demo. They are intended to run in PowerShell
 ```pwsh
 $tenantId = '<tenant-id>'
 $subscriptionId = '<subscription-id>'
-$resourceGroup = '<resource-group-name>'
+$resourceGroupName = '<resource-group-name>'
 $location = '<location>'
 # Principal ID of the individual who should be able to read metrics from the Azure Monitor Workspace
-$principalId = '<principal-id-guid'  
+$principalId = '<principal-id-guid>'  
 # The AKS node resource group is of the default format MC_<aks-resource-group>_<aks-cluster-name>_<aks-region>. We calculate
 # that below based on the inputs used to format the name of the AKS cluster. It's not perfect, but it makes for a single click
 # deployment.
 $appIdentifier = Get-Content .\shared_variables.json | ConvertFrom-JSON | Select-Object -ExpandProperty appIdentifier
-$nodeResourceGroupName = "MC_$($resourceGroup)_aks-$($appIdentifier)-$($location)"
+$nodeResourceGroupName = "MC_$($resourceGroupName)_aks-$($appIdentifier)-$($location)"
 
 az login --tenant $tenantId
 az account set --subscription $subscriptionId
 # Create the resource group to deploy the AKS service to.
-az group create --location $location --name $resourceGroup
+az group create --location $location --name $resourceGroupName
 # Deploy the AKS service and other services
-az deployment group create --name AKSResources --resource-group $resourceGroup --template-file 01_resources.bicep --parameters principalId=$principalId
+az deployment group create --name AKSResources --resource-group $resourceGroupName --template-file 01_resources.bicep --parameters principalId=$principalId
 # Get the input parameters for the second deployment command
 $aksVnetName = az network vnet list --resource-group $nodeResourceGroupName --query [].name -o tsv
-$amplsId = az monitor private-link-scope list --resource-group $resourceGroup --query [].id -o tsv
+$amplsId = az monitor private-link-scope list --resource-group $resourceGroupName --query [].id -o tsv
 # Deploy the resources required within the node resource group
 az deployment group create --name AKSNodeResources --resource-group $nodeResourceGroupName --template-file 02_node_resources.bicep --parameters vnetName=$aksVnetName amplsId=$amplsId
 ```
