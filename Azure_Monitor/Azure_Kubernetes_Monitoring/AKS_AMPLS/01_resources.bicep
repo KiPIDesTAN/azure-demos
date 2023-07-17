@@ -28,7 +28,7 @@ var aksName = 'aks-${appIdentifier}-${location}'    // AKS Cluster name
 var aksDnsPrefix = '${aksName}-dns'               // AKS DNS prefix
 var aksNodeResourceGroup = 'MC_${resourceGroup().name}_${aksName}' // AKS Node resource group name
 var dcrCIName = 'MSCI-${appIdentifier}-${location}' // Data collection rule name for Container Insights
-var dceName = 'MSCI-${appIdentifier}-${location}'  // Data collection endpoint name Container Insights uses
+var dceName = 'dce-${appIdentifier}-${location}'  // Data collection endpoint name Container Insights uses
 var dcrPROMName = 'MSProm-${appIdentifier}-${location}' // Data collection rule name for Managed Prometheus
 var dcePROMName = 'MSProm-${appIdentifier}-${location}'  // Data collection endpoint name Managed Prometheus uses
 
@@ -270,7 +270,6 @@ resource amwAccount 'Microsoft.Monitor/accounts@2023-04-03' = {
 }
 
 // Create the DCE for Managed Prometheus
-// NOTE: We are going to use this DCE for two purposes. One is the DCE required by the Prometheus DCR. The other is to force network isolation when AKS sends metrics through the AMPLS to AMW.
 resource dcePROM 'Microsoft.Insights/dataCollectionEndpoints@2022-06-01' = {
   name: dcePROMName
   location: location
