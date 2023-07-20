@@ -33,6 +33,18 @@ __NOTE:__ A parameter file may not always be required.
 ```pwsh
 az deployment mg create --location <location> --management-group-id --template-file <filname.bicep> --parameters <parameter-file.bicepparam>
 ```
+## Log Analytics Workspace - Table Retention
+
+This policy will check for the retention time period set across all tables in a Log Analytics Workspace. If the retention period, for actively queriable data, is beyond a set retention period, the policy will fail.
+
+There are two policies within the policy initiative.
+
+1. Triggers off the Log Analytics Workspace setting a default retention period.
+2. Triggers off an individual table within a Log Analytics Workspace, checking the individual table.
+
+The default retention check is 30 days.
+
+This policy initiative does not check the total retention. Total retention is not often something people care about.
 
 ## Network Isolation
 
