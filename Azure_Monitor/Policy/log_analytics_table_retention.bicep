@@ -1,7 +1,7 @@
 targetScope = 'subscription'
 
-var lawRetentionPolicyDefinitionName = 'policy-law-retention'
-var lawTableRetentionPolicyDefinitionName = 'policy-law-table-retention'
+var lawRetentionPolicyDefinitionName = 'policy-definition-law-retention'
+var lawTableRetentionPolicyDefinitionName = 'policy-definition-law-table-retention'
 var lawTableRetentionPolicySetName = 'policy-set-law-table-retention'
 
 // Create an Azure Policy for the default retention policy on the Log Analytics Workspace

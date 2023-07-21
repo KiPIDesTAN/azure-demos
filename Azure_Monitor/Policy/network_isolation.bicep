@@ -1,8 +1,8 @@
 targetScope = 'subscription'
 
-var dceNetworkIsolationPolicyDefinitionName = 'policy-dce-network-isolation'
-var lawNetworkIsolationPolicyDefinitionName = 'policy-law-network-isolation'
-var amplsNetworkIsolationPolicyDefinitionName = 'policy-ampls-network-isolation'
+var dceNetworkIsolationPolicyDefinitionName = 'policy-definition-dce-network-isolation'
+var lawNetworkIsolationPolicyDefinitionName = 'policy-definition-law-network-isolation'
+var amplsNetworkIsolationPolicyDefinitionName = 'policy-definition-ampls-network-isolation'
 var monitoringNewtorkIsolationPolicySetName = 'policy-set-monitoring-network-isolation'
 
 // Azure Policy to check the network isolation on Data Collection Endpoints is set appropriately.
