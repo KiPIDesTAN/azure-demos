@@ -10,15 +10,19 @@ We use this method instead of other options, such as via a script in the [Log In
 
 We use cloud-init to deploy this work at scale. The cloud-init code can be found in [here](./cloud-init.yml). The code deploys a package, two scripts, and two cron jobs that call the scripts.
 
+__NOTE:__ This code can be used as a pattern for deploying any script to Azure VMs or VMSSs at scale.
+
 ## How It Works
 
 If you don't care how this works, and just want to see it in action, go to the [deploy](#deploy) section.
 
 ### Architecture
 
-Below is a high-level architecture that shows most of the components. A data collection rule is created to collect the log data from the VM and send that data to the log analytics workspace. The data collection rule contains a Kusto transform that parses the output of the process log created on the VM into discrete fields that map to the custom table created in the Log Analytics Workspace.
+Below is a high-level diagram that shows most of the components. A data collection rule is created to collect the log data from the VM and send that data to the log analytics workspace. The data collection rule contains a Kusto transform that parses the output of the process log created on the VM into discrete fields that map to the custom table created in the Log Analytics Workspace.
 
-![Architecture](./images/architecture.png)
+The code is deployed via [Bicep](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/overview?tabs=bicep). The [cloud-init.yml](./cloud-init.yml) file is associated with the Bicep code that deploys the VM. The cloud-init.yml file is executed once when the VM is first started. It installs some utilities, creates two scripts, and sets up the cron jobs to run those scripts.
+
+![Architecture](./images/process_monitor_diagram.png)
 
 ### Bicep Resource Relationship
 
