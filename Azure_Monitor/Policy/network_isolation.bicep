@@ -208,6 +208,10 @@ resource amplsNetworkIsolationPolicyDefinition 'Microsoft.Authorization/policyDe
                 field: 'microsoft.insights/privateLinkScopes/accessModeSettings.queryAccessMode'
                 notEquals: '[parameters(\'queryAccessMode\')]'
               }
+              {
+                value: 'length(field(\'microsoft.insights/privateLinkScopes/accessModeSettings.exclusions[*]\'))'
+                greater: 0
+              }
             ]
           }
         ]

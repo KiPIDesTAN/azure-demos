@@ -76,6 +76,8 @@ The following items are checked by the Azure Policy Initiative with their defaul
 | Log Analytics Workspace | Public Network - Ingestion</br>Public Network - Query | Ingestion - Disabled</br>Query - Enabled |
 | Azure Monitor Private Link Scope | Public Network - Ingestion</br>Public Network - Query  | Ingestion - PrivateOnly</br>Query - PrivateOnly |
 
+The policy will also make sure there are no access mode exceptions set on the Azure Monitor Private Link scope.
+
 The Log Analytics Workspace has its public network access for querying set to enabled by default so traffic originating outside a vnet can query the Log Analytics Workspace. In other words, a remote worker using their home internet, not through a VPN, can query data in a Log Analytics Workspace.
 
 ### Demo Files
