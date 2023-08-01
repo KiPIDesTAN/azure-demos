@@ -2,6 +2,17 @@
 
 This folder contains demos for various Azure Policies related to monitoring. These policies do not execute policy assignments. They only create policies and initiatives. See below for a list of the implemented policies.
 
+- [Deployment](#deployment)
+- [Log Analytics Workspace - Table Retention](#log-analytics-workspace---table-retention)
+  - [Demo Files](#demo-files)
+- [Log Analytics Workspace - Targeted - Table Retention](#log-analytics-workspace---targeted---table-retention)
+  - [Demo Files](#demo-files-1)
+- [Log Ingestion API - Prevent Populating Microsoft Table](#log-ingestion-api---prevent-populating-microsoft-table)
+  - [Demo Files](#demo-files-2)
+- [Network Isolation](#network-isolation)
+  - [Demo Files](#demo-files-3)
+
+
 ## Deployment
 
 The commands below will deploy the policy files. They are written for PowerShell syntax. Changing them to bash should be straight forward. The commands below assume your az cli is already logged into the right account and the subscription is set appropriately.
@@ -29,7 +40,7 @@ This policy initiative does not check the total retention. Total retention is no
 
 ### Demo Files
 
-- log_analytics_table_retention.bicep
+- [log_analytics_table_retention.bicep](./log_analytics_table_retention.bicep)
 
 ## Log Analytics Workspace - Targeted - Table Retention
 
@@ -43,7 +54,15 @@ When the policy effect is set to audit, the Log Analytics Workspace deployment w
 
 ### Demo Files
 
-- log_analytics_targeted_table_retention.bicep
+- [log_analytics_targeted_table_retention.bicep](./log_analytics_targeted_table_retention.bicep)
+
+## Log Ingestion API - Prevent Populating Microsoft Table
+
+This policy will block the use of the Log Ingestion API from populating a Microsoft-delivered table. The policy works by auditing for or preventing the deployment of a Data Collection Rule that has a data flow where at least one stream does not start with "Microsoft-", but the output stream contains "Microsoft-".
+
+### Demo Files
+
+- [log_ingestion_api.bicep](./log_ingestion_api.bicep)
 
 ## Network Isolation
 
@@ -61,4 +80,4 @@ The Log Analytics Workspace has its public network access for querying set to en
 
 ### Demo Files
 
-- network_isolation.bicep
+- [network_isolation.bicep](./network_isolation.bicep)
